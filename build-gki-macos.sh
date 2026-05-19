@@ -11,6 +11,8 @@ HOST_TOOLS_DIR="$ROOT_DIR/prebuilts/build-tools/darwin-x86/bin"
 MACOS_INCLUDE_DIR="$ROOT_DIR/tools/macos-kbuild/include"
 MACOS_BIN_DIR="$ROOT_DIR/tools/macos-kbuild/bin"
 SDKROOT=${SDKROOT:-$(xcrun --show-sdk-path)}
+HOST_TARGET=${HOST_TARGET:-$(uname -m)-apple-darwin}
+TARGET_TRIPLE=${TARGET_TRIPLE:-aarch64-linux-gnu}
 
 require_exe() {
 	if [ ! -x "$1" ]; then
@@ -51,15 +53,11 @@ has_jobs_arg() {
 
 ACK_CLANG_VERSION=${ACK_CLANG_VERSION:-$(sed -n 's/^CLANG_VERSION=//p' "$ROOT_DIR/common/build.config.constants" | head -n 1)}
 LLVM_DIR=${LLVM_DIR:-"$ROOT_DIR/prebuilts/clang/host/darwin-x86/clang-$ACK_CLANG_VERSION"}
+TARGET_CC="$LLVM_DIR/bin/clang --target=$TARGET_TRIPLE"
 
 require_exe "$LLVM_DIR/bin/clang"
 require_exe "$LLVM_DIR/bin/clang++"
-require_exe "$LLVM_DIR/bin/ld.lld"
 require_exe "$LLVM_DIR/bin/llvm-ar"
-require_exe "$LLVM_DIR/bin/llvm-nm"
-require_exe "$LLVM_DIR/bin/llvm-objcopy"
-require_exe "$LLVM_DIR/bin/llvm-objdump"
-require_exe "$LLVM_DIR/bin/llvm-strip"
 require_file "$OPENSSL_DIR/include/openssl/opensslv.h"
 require_file "$OPENSSL_DIR/lib/libcrypto.dylib"
 require_file "$SDKROOT/usr/include/sys/types.h"
@@ -136,19 +134,16 @@ run_make() {
 		ARCH=arm64 \
 		LLVM=1 \
 		LLVM_IAS=1 \
-		CC="$LLVM_DIR/bin/clang" \
+		CC="$TARGET_CC" \
 		LD="$LLVM_DIR/bin/ld.lld" \
-		AR="$LLVM_DIR/bin/llvm-ar" \
 		NM="$LLVM_DIR/bin/llvm-nm" \
 		OBJCOPY="$LLVM_DIR/bin/llvm-objcopy" \
-		OBJDUMP="$LLVM_DIR/bin/llvm-objdump" \
-		STRIP="$LLVM_DIR/bin/llvm-strip" \
 		HOSTCC="$LLVM_DIR/bin/clang" \
 		HOSTCXX="$LLVM_DIR/bin/clang++" \
 		HOSTLD="$LLVM_DIR/bin/clang" \
 		HOSTAR="$LLVM_DIR/bin/llvm-ar" \
-		HOSTCFLAGS="-isysroot $SDKROOT -I$MACOS_INCLUDE_DIR -I$OPENSSL_DIR/include ${HOSTCFLAGS:-}" \
-		HOSTLDFLAGS="-isysroot $SDKROOT -L$OPENSSL_DIR/lib ${HOSTLDFLAGS:-}" \
+		HOSTCFLAGS="-target $HOST_TARGET -isysroot $SDKROOT -I$MACOS_INCLUDE_DIR -I$OPENSSL_DIR/include ${HOSTCFLAGS:-}" \
+		HOSTLDFLAGS="-target $HOST_TARGET -isysroot $SDKROOT -L$OPENSSL_DIR/lib ${HOSTLDFLAGS:-}" \
 		KCFLAGS="$KCFLAGS" \
 		SED="$BREW_BIN/gsed" \
 		DTC="$BREW_BIN/dtc" \
@@ -163,23 +158,20 @@ prepare_defconfig() {
 	mkdir -p "$OUT_DIR"
 	(
 		cd "$ROOT_DIR/common"
-		KCONFIG_CONFIG="$OUT_DIR/.config" \
+			KCONFIG_CONFIG="$OUT_DIR/.config" \
 			ARCH=arm64 \
 			LLVM=1 \
 			LLVM_IAS=1 \
-			CC="$LLVM_DIR/bin/clang" \
+			CC="$TARGET_CC" \
 			LD="$LLVM_DIR/bin/ld.lld" \
-			AR="$LLVM_DIR/bin/llvm-ar" \
 			NM="$LLVM_DIR/bin/llvm-nm" \
 			OBJCOPY="$LLVM_DIR/bin/llvm-objcopy" \
-			OBJDUMP="$LLVM_DIR/bin/llvm-objdump" \
-			STRIP="$LLVM_DIR/bin/llvm-strip" \
 			HOSTCC="$LLVM_DIR/bin/clang" \
 			HOSTCXX="$LLVM_DIR/bin/clang++" \
 			HOSTLD="$LLVM_DIR/bin/clang" \
 			HOSTAR="$LLVM_DIR/bin/llvm-ar" \
-			HOSTCFLAGS="-isysroot $SDKROOT -I$MACOS_INCLUDE_DIR -I$OPENSSL_DIR/include ${HOSTCFLAGS:-}" \
-			HOSTLDFLAGS="-isysroot $SDKROOT -L$OPENSSL_DIR/lib ${HOSTLDFLAGS:-}" \
+			HOSTCFLAGS="-target $HOST_TARGET -isysroot $SDKROOT -I$MACOS_INCLUDE_DIR -I$OPENSSL_DIR/include ${HOSTCFLAGS:-}" \
+			HOSTLDFLAGS="-target $HOST_TARGET -isysroot $SDKROOT -L$OPENSSL_DIR/lib ${HOSTLDFLAGS:-}" \
 			KCFLAGS="$KCFLAGS" \
 			SED="$BREW_BIN/gsed" \
 			DTC="$BREW_BIN/dtc" \
@@ -200,6 +192,7 @@ write_dist_manifest() {
 		printf 'ack_clang_version=%s\n' "$ACK_CLANG_VERSION"
 		printf 'clang_version=%s\n' "$("$LLVM_DIR/bin/clang" --version | sed -n '1p')"
 		printf 'llvm_dir=%s\n' "$LLVM_DIR"
+		printf 'target_triple=%s\n' "$TARGET_TRIPLE"
 		printf 'kcflags=%s\n' "$KCFLAGS"
 		printf 'localversion_suffix=%s\n' "$GKI_LOCALVERSION_SUFFIX"
 		[ ! -f "$OUT_DIR/.config" ] || sed -n 's/^\(CONFIG_CC_VERSION_TEXT=.*\)$/\1/p; s/^\(CONFIG_CLANG_VERSION=.*\)$/\1/p; s/^\(CONFIG_ARM64_4K_PAGES=.*\)$/\1/p; s/^\(CONFIG_ARM64_16K_PAGES=.*\)$/\1/p; s/^\(CONFIG_MODULE_FORCE_LOAD=.*\)$/\1/p; s/^\(CONFIG_MODVERSIONS=.*\)$/\1/p; s/^\(CONFIG_MODULE_SIG_PROTECT=.*\)$/\1/p; s/^\(CONFIG_KSU=.*\)$/\1/p' "$OUT_DIR/.config"
