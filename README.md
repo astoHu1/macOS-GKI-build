@@ -13,7 +13,7 @@ brew install llvm openssl@3 dtc lz4 gnu-sed zip
 Default paths:
 
 ```sh
-LLVM_DIR=/opt/homebrew/opt/llvm
+LLVM_DIR=prebuilts/clang/host/darwin-x86/clang-$CLANG_VERSION
 OPENSSL_DIR=/opt/homebrew/opt/openssl@3
 BREW_BIN=/opt/homebrew/bin
 ```

@@ -156,9 +156,10 @@ prepare_defconfig() {
 	require_file "$BASE_DEFCONFIG"
 	require_file "$FRAGMENT_CONFIG"
 	mkdir -p "$OUT_DIR"
+	merged_config="$OUT_DIR/.config.merged"
 	(
 		cd "$ROOT_DIR/common"
-			KCONFIG_CONFIG="$OUT_DIR/.config" \
+			KCONFIG_CONFIG="$merged_config" \
 			ARCH=arm64 \
 			LLVM=1 \
 			LLVM_IAS=1 \
@@ -177,8 +178,9 @@ prepare_defconfig() {
 			DTC="$BREW_BIN/dtc" \
 			LOCALVERSION="$GKI_LOCALVERSION_SUFFIX" \
 			"$ROOT_DIR/common/scripts/kconfig/merge_config.sh" \
-			-r -O "$OUT_DIR" "$BASE_DEFCONFIG" "$FRAGMENT_CONFIG"
+			-m -r -O "$OUT_DIR" "$BASE_DEFCONFIG" "$FRAGMENT_CONFIG"
 	)
+	run_make "KCONFIG_ALLCONFIG=$merged_config" alldefconfig
 }
 
 write_dist_manifest() {
@@ -195,7 +197,7 @@ write_dist_manifest() {
 		printf 'target_triple=%s\n' "$TARGET_TRIPLE"
 		printf 'kcflags=%s\n' "$KCFLAGS"
 		printf 'localversion_suffix=%s\n' "$GKI_LOCALVERSION_SUFFIX"
-		[ ! -f "$OUT_DIR/.config" ] || sed -n 's/^\(CONFIG_CC_VERSION_TEXT=.*\)$/\1/p; s/^\(CONFIG_CLANG_VERSION=.*\)$/\1/p; s/^\(CONFIG_ARM64_4K_PAGES=.*\)$/\1/p; s/^\(CONFIG_ARM64_16K_PAGES=.*\)$/\1/p; s/^\(CONFIG_MODULE_FORCE_LOAD=.*\)$/\1/p; s/^\(CONFIG_MODVERSIONS=.*\)$/\1/p; s/^\(CONFIG_MODULE_SIG_PROTECT=.*\)$/\1/p; s/^\(CONFIG_KSU=.*\)$/\1/p' "$OUT_DIR/.config"
+		[ ! -f "$OUT_DIR/.config" ] || sed -n 's/^\(CONFIG_CC_VERSION_TEXT=.*\)$/\1/p; s/^\(CONFIG_CLANG_VERSION=.*\)$/\1/p; s/^\(CONFIG_TOOLS_SUPPORT_RELR=.*\)$/\1/p; s/^\(CONFIG_RELR=.*\)$/\1/p; s/^\(CONFIG_ARM64_4K_PAGES=.*\)$/\1/p; s/^\(CONFIG_ARM64_16K_PAGES=.*\)$/\1/p; s/^\(CONFIG_MODULE_FORCE_LOAD=.*\)$/\1/p; s/^\(CONFIG_MODVERSIONS=.*\)$/\1/p; s/^\(CONFIG_MODULE_SIG_PROTECT=.*\)$/\1/p; s/^\(CONFIG_KSU=.*\)$/\1/p' "$OUT_DIR/.config"
 		[ ! -f "$DIST_DIR/Image.gz" ] || printf 'image_gz=%s\n' "$DIST_DIR/Image.gz"
 		[ ! -f "$DIST_DIR/Image.lz4" ] || printf 'image_lz4=%s\n' "$DIST_DIR/Image.lz4"
 	} > "$DIST_DIR/manifest.txt"
